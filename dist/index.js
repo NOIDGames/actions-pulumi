@@ -97161,6 +97161,18 @@ function getPlatform() {
     const runnerArch = external_os_.arch();
     return platforms[`${runnerPlatform}-${runnerArch}`];
 }
+function exportFromCache(cachedPath, expectedVersion) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.addPath(cachedPath);
+        // Check that running pulumi now returns a version we expect
+        const versionExec = yield exec_exec(`pulumi`, ['version'], true);
+        const pulumiVersion = versionExec.stdout.trim();
+        core.debug(`Running pulumi verison returned: ${pulumiVersion}`);
+        if (!semver.satisfies(pulumiVersion, expectedVersion)) {
+            throw new Error('Installed version did not satisfy the resolved version');
+        }
+    });
+}
 function downloadCli(range) {
     return __awaiter(this, void 0, void 0, function* () {
         const platform = getPlatform();
@@ -97191,6 +97203,12 @@ function downloadCli(range) {
             else {
                 core.info('Pulumi is not detected in the PATH. Proceeding to download');
             }
+        }
+        let cachedPath = tool_cache.find('pulumi', range);
+        if (cachedPath) {
+            core.info('Found Pulumi in the tool cache');
+            yield exportFromCache(cachedPath, range);
+            return;
         }
         const { version, downloads } = yield getVersionObject(range);
         core.info(`Matched version: ${version}`);
@@ -97234,15 +97252,8 @@ function downloadCli(range) {
                 break;
             }
         }
-        const cachedPath = yield tool_cache.cacheDir(external_path_.join(destination, 'bin'), 'pulumi', version);
-        core.addPath(cachedPath);
-        // Check that running pulumi now returns a version we expect
-        const versionExec = yield exec_exec(`pulumi`, ['version'], true);
-        const pulumiVersion = versionExec.stdout.trim();
-        core.debug(`Running pulumi verison returned: ${pulumiVersion}`);
-        if (!semver.satisfies(pulumiVersion, version)) {
-            throw new Error('Installed version did not satisfy the resolved version');
-        }
+        cachedPath = yield tool_cache.cacheDir(external_path_.join(destination, 'bin'), 'pulumi', version);
+        yield exportFromCache(cachedPath, version);
     });
 }
 
